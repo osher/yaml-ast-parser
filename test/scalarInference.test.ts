@@ -1,13 +1,13 @@
 import * as chai from 'chai'
 const assert = chai.assert
-import { determineScalarType as sut, ScalarType, parseYamlBoolean, parseYamlInteger, parseYamlFloat } from '../src/scalarInference'
+import { DetermineScalarSchema, determineScalarType as sut, ScalarType, parseYamlBoolean, parseYamlInteger, parseYamlFloat } from '../src/scalarInference'
 
 import * as Yaml from '../src/index'
 
 suite('determineScalarType', () => {
 
-    function determineScalarType(scalar: Yaml.YAMLDocument) {
-        return sut(<Yaml.YAMLScalar>scalar)
+    function determineScalarType(scalar: Yaml.YAMLDocument, schema: DetermineScalarSchema = DetermineScalarSchema.Core) {
+        return sut(<Yaml.YAMLScalar>scalar, schema)
     }
 
     function safeLoad(input) {
@@ -16,40 +16,37 @@ suite('determineScalarType', () => {
 
     let _test = test;
 
-    // http://www.yaml.org/spec/1.2/spec.html#id2805071
-    suite('Plain Tag Resolution', () => {
+    suite('JSON Schema', () => {
+        suite('Plain Tag Resolution', () => {
 
-        function test(name, type, acceptable) {
-            _test(name, function () {
-                for (const word of acceptable) {
-                    assert.strictEqual(determineScalarType(safeLoad(word)), type, word)
-                }
+            function test(name, type, acceptable) {
+                _test(name, function () {
+                    for (const word of acceptable) {
+                        assert.strictEqual(determineScalarType(safeLoad(word), DetermineScalarSchema.Json), type, word)
+                    }
+                })
+            }
+
+            test('boolean', ScalarType.bool, ["true", "false"])
+
+            test("null", ScalarType.null, ["null"])
+
+            _test("null as from an array", function () {
+                const node = Yaml.newScalar('');
+                node.plainScalar = true;
+                assert.strictEqual(determineScalarType(node), ScalarType.null, "unquoted empty string")
             })
-        };
 
-        test('boolean', ScalarType.bool, ["true", "True", "TRUE", "false", "False", "FALSE"])
+            test("integer", ScalarType.int, ["0", "-0", "3", "-19"])
 
-        test("null", ScalarType.null, ["null", "Null", "NULL", "~", ""])
-        _test("null as from an array", function () {
-            const node = Yaml.newScalar('');
-            node.plainScalar = true;
-            assert.strictEqual(determineScalarType(node), ScalarType.null, "unquoted empty string")
+            test("float", ScalarType.float, ["0.", "-0.0", "12e03", "-2E+05"])
+
+            test("string", ScalarType.string, ["'true'", "'TrUe'", "''", "'0'", '"1"', '" .5"'])
         })
 
-        test("integer", ScalarType.int, ["0", "0o7", "0x3A", "-19"])
-
-        test("float", ScalarType.float, ["0.", "-0.0", ".5", "+12e03", "-2E+05"])
-
-        test("float-infinity", ScalarType.float, [".inf", "-.Inf", "+.INF"])
-
-        test("float-NaN", ScalarType.float, [".nan", ".NaN", ".NAN"])
-
-        test("string", ScalarType.string, ["'true'", "TrUe", "nULl", "''", "'0'", '"1"', '" .5"', ".inF", ".nAn"])
-    })
-
-    suite('Flow style', () => {
-        test('still recognizes types', function () {
-            const node = <Yaml.YAMLSequence>safeLoad(`[ null,
+        suite('Flow style', () => {
+            test('still recognizes types', function () {
+                const node = <Yaml.YAMLSequence>safeLoad(`[ null,
   true,
   0,
   0.,
@@ -58,19 +55,80 @@ suite('determineScalarType', () => {
   "-123\n345"
 ]`)
 
-            const expected = [ScalarType.null, ScalarType.bool, ScalarType.int, ScalarType.float, ScalarType.float, ScalarType.float, ScalarType.string]
+                const expected = [ScalarType.null, ScalarType.bool, ScalarType.int, ScalarType.float, ScalarType.float, ScalarType.float, ScalarType.string]
 
-            assert.deepEqual(node.items.map(d => determineScalarType(d)), expected)
+                assert.deepEqual(node.items.map(d => determineScalarType(d)), expected)
+            })
+        })
+
+        suite('Block styles', () => {
+            var variations = ['>', '|', '>8', '|+1', '>-', '>+', '|-', '|+']
+
+            test('are always strings', function () {
+                for (const variant of variations) {
+                    assert.deepEqual(determineScalarType(safeLoad(variant + "\n 123")), ScalarType.string);
+                }
+            })
         })
     })
 
-    suite('Block styles', () => {
-        var variations = ['>', '|', '>8', '|+1', '>-', '>+', '|-', '|+']
+    // http://www.yaml.org/spec/1.2/spec.html#id2805071
+    suite('Core Schema', () => {
+        suite('Plain Tag Resolution', () => {
 
-        test('are always strings', function () {
-            for (const variant of variations) {
-                assert.deepEqual(determineScalarType(safeLoad(variant + "\n 123")), ScalarType.string);
-            }
+            function test(name, type, acceptable) {
+                _test(name, function () {
+                    for (const word of acceptable) {
+                        assert.strictEqual(determineScalarType(safeLoad(word)), type, word)
+                    }
+                })
+            };
+
+            test('boolean', ScalarType.bool, ["true", "True", "TRUE", "false", "False", "FALSE"])
+
+            test("null", ScalarType.null, ["null", "Null", "NULL", "~", ""])
+            _test("null as from an array", function () {
+                const node = Yaml.newScalar('');
+                node.plainScalar = true;
+                assert.strictEqual(determineScalarType(node), ScalarType.null, "unquoted empty string")
+            })
+
+            test("integer", ScalarType.int, ["0", "0o7", "0x3A", "-19"])
+
+            test("float", ScalarType.float, ["0.", "-0.0", ".5", "+12e03", "-2E+05"])
+
+            test("float-infinity", ScalarType.float, [".inf", "-.Inf", "+.INF"])
+
+            test("float-NaN", ScalarType.float, [".nan", ".NaN", ".NAN"])
+
+            test("string", ScalarType.string, ["'true'", "TrUe", "nULl", "''", "'0'", '"1"', '" .5"', ".inF", ".nAn"])
+        })
+
+        suite('Flow style', () => {
+            test('still recognizes types', function () {
+                const node = <Yaml.YAMLSequence>safeLoad(`[ null,
+  true,
+  0,
+  0.,
+  .inf,
+  .nan,
+  "-123\n345"
+]`)
+
+                const expected = [ScalarType.null, ScalarType.bool, ScalarType.int, ScalarType.float, ScalarType.float, ScalarType.float, ScalarType.string]
+
+                assert.deepEqual(node.items.map(d => determineScalarType(d)), expected)
+            })
+        })
+
+        suite('Block styles', () => {
+            var variations = ['>', '|', '>8', '|+1', '>-', '>+', '|-', '|+']
+
+            test('are always strings', function () {
+                for (const variant of variations) {
+                    assert.deepEqual(determineScalarType(safeLoad(variant + "\n 123")), ScalarType.string);
+                }
+            })
         })
     })
 })

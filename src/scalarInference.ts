@@ -1,4 +1,5 @@
 import { YAMLScalar } from './yamlAST'
+import YAMLException = require('./exception');
 
 export function parseYamlBoolean(input: string): boolean {
     if (["true", "True", "TRUE"].lastIndexOf(input) >= 0) {
@@ -54,15 +55,60 @@ export enum ScalarType {
     null, bool, int, float, string
 }
 
-/** Determines the type of a scalar according to
-  * the YAML 1.2 Core Schema (http://www.yaml.org/spec/1.2/spec.html#id2804923)
-  */
-export function determineScalarType(node: YAMLScalar): ScalarType {
-    if (node === undefined) {
+export enum DetermineScalarSchema  {
+  Core = 'core',
+  Json = 'json',
+}
+
+
+export function determineScalarType(node: YAMLScalar, schema: DetermineScalarSchema = DetermineScalarSchema.Core): ScalarType {
+    if (node === void 0) {
+        // we should throw here, but for backwards compatibility purposes we need to have it here
         return ScalarType.null;
     }
 
-    if (node.doubleQuoted || !node.plainScalar || node['singleQuoted']) {
+    switch (schema) {
+        case DetermineScalarSchema.Core:
+            return determineScalarTypeForCoreSchema(node);
+        case DetermineScalarSchema.Json:
+            return determineScalarTypeForJsonSchema(node);
+    }
+}
+
+/** Determines the type of a scalar according to
+ * the YAML 1.2 JSON Schema (https://yaml.org/spec/1.2/spec.html#id2804356)
+ */
+export function determineScalarTypeForJsonSchema(node: YAMLScalar): ScalarType {
+    if (node.doubleQuoted || node.singleQuoted) {
+        return ScalarType.string
+    }
+
+    const value = node.value;
+
+    if (value === 'null') {
+        return ScalarType.null;
+    }
+
+    if (value === 'true' || value === 'false') {
+        return ScalarType.bool;
+    }
+
+    if (/^-?(?:0|[1-9][0-9]*)$/.test(value)) {
+        return ScalarType.int;
+    }
+
+    if (/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]*)?(?:[eE][-+]?[0-9]+)?$/.test(value)) {
+        return ScalarType.float;
+    }
+
+    throw new YAMLException('could not determine scalar type');
+}
+
+/** Determines the type of a scalar according to
+ * the YAML 1.2 Core Schema (http://www.yaml.org/spec/1.2/spec.html#id2804923)
+ */
+export function determineScalarTypeForCoreSchema(node: YAMLScalar): ScalarType {
+    if (node.doubleQuoted || !node.plainScalar || node.singleQuoted) {
         return ScalarType.string
     }
 
