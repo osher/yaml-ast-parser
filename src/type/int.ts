@@ -81,11 +81,15 @@ function resolveYamlInteger(data) {
       ch = data[index];
       if (ch === '_') { continue; }
       if (!isOctCode(data.charCodeAt(index))) {
-        return false;
+        // if it's not oct number then treat is as possibly decimal and do not return yet
+        hasDigits = false;
+        break;
       }
       hasDigits = true;
     }
-    return hasDigits;
+    if (hasDigits) {
+      return hasDigits;
+    }
   }
 
   // base 10 (except 0) or base 60

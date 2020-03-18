@@ -48,4 +48,22 @@ b:
 `)
     });
   });
+
+  suite('int schema', () => {
+    test('binary number', () => {
+      expect(safeDump({ value: '0b10101' })).to.equal(`value: '0b10101'\n`);
+    });
+    test('hex number', () => {
+      expect(safeDump({ value: '0x25DC' })).to.equal(`value: '0x25DC'\n`);
+    });
+    test('oct number', () => {
+      expect(safeDump({ value: '01234567' })).to.equal(`value: '01234567'\n`);
+    });
+    test('dec number', () => {
+      expect(safeDump({ value: '1234567890' })).to.equal(`value: '1234567890'\n`);
+    });
+    test('leading zero dec number', () => {
+      expect(safeDump({ value: '0123456789' })).to.equal(`value: '0123456789'\n`);
+    });
+  });
 });
