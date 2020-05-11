@@ -1,6 +1,6 @@
 import * as chai from 'chai'
 const assert = chai.assert
-import { determineScalarType as sut, ScalarType, parseYamlBoolean, parseYamlInteger, parseYamlFloat } from '../src/scalarInference'
+import { determineScalarType as sut, ScalarType, parseYamlBoolean, parseYamlBigInteger, parseYamlInteger, parseYamlFloat } from '../src/scalarInference'
 
 import * as Yaml from '../src/index'
 
@@ -94,6 +94,39 @@ suite('parseYamlInteger', () => {
         let error;
         try {
             parseYamlInteger("'1'")
+        }
+        catch (e) {
+            error = e;
+        }
+
+        assert(error, "should have thrown")
+    })
+})
+
+suite('parseYamlBigInteger', () => {
+    test('decimal', function () {
+        assert.strictEqual(parseYamlBigInteger("0"), 0)
+        assert.strictEqual(parseYamlBigInteger("-19"), -19)
+        assert.strictEqual(parseYamlBigInteger("+1"), 1)
+    })
+
+    test('large decimal', function () {
+        assert.equal(parseYamlBigInteger("549755813888"), BigInt("549755813888"))
+        assert.equal(parseYamlBigInteger("9223372036854775807"), BigInt("9223372036854775807"))
+    })
+
+    test('hexadecimal', function () {
+        assert.strictEqual(parseYamlBigInteger("0x3A"), 58)
+    })
+
+    test('octal', function () {
+        assert.strictEqual(parseYamlBigInteger("0o7"), 7)
+    })
+
+    test('otherwise', function () {
+        let error;
+        try {
+            parseYamlBigInteger("'1'")
         }
         catch (e) {
             error = e;

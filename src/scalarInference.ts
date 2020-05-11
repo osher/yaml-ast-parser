@@ -22,8 +22,18 @@ function safeParseYamlInteger(input: string): number {
 export function parseYamlInteger(input: string): number {
     const result = safeParseYamlInteger(input)
 
-    if (isNaN(result)) {
+    if (Number.isNaN(result)) {
         throw `Invalid integer "${input}"`
+    }
+
+    return result;
+}
+
+export function parseYamlBigInteger(input: string): number | bigint {
+    const result = parseYamlInteger(input)
+
+    if (result > Number.MAX_SAFE_INTEGER && input.lastIndexOf('0o', 0) === -1) {
+        return BigInt(input);
     }
 
     return result;
