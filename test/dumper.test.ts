@@ -29,13 +29,23 @@ Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, ad
   });
 
   suite('noRefs dump option', () => {
-    test('should not use anchors for same objects by default', () => {
-      const obj = { foo: 'bar' };
+    context('when no option is set', () => {
+      test('should use anchors for same objects by default', () => {
+        const obj = { foo: 'bar' };
 
-      expect(safeDump({ a: obj, b: obj })).to.equal(`a: &ref_0
+        expect(safeDump({ a: obj, b: obj })).to.equal(`a: &ref_0
   foo: bar
 b: *ref_0
 `)
+      });
+      test('dumps anchors', () => {
+        const obj = { foo: 'bar' };
+
+        expect(safeDump([obj, obj])).to.equal(`- &ref_0
+  foo: bar
+- *ref_0
+`)
+      });
     });
 
     test('should not use anchors for same objects if truthy', () => {
