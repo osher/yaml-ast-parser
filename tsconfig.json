@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "es2017",
+    "target": "es2020",
     "lib": ["ES2017", "ES2020.BigInt"],
     "module": "commonjs",
     "declaration": true,

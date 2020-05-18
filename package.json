@@ -1,6 +1,6 @@
 {
   "name": "@stoplight/yaml-ast-parser",
-  "version": "0.0.47",
+  "version": "0.0.48",
   "main": "dist/src/index.js",
   "scripts": {
     "build": "rimraf dist && tsc",

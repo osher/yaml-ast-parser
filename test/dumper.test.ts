@@ -75,5 +75,11 @@ b:
     test('leading zero dec number', () => {
       expect(safeDump({ value: '0123456789' })).to.equal(`value: '0123456789'\n`);
     });
+    test('big ints', () => {
+      expect(safeDump({ value: 2n ** 63n - 1n })).to.equal(`value: 9223372036854775807\n`);
+      expect(safeDump({ value: 2n ** 63n * -1n })).to.equal(`value: -9223372036854775808\n`);
+      expect(safeDump({ value: 2n ** 64n })).to.equal(`value: 18446744073709551616\n`);
+      expect(safeDump({ value: 2n ** 128n - 1n })).to.equal(`value: 340282366920938463463374607431768211455\n`);
+    });
   });
 });

@@ -164,8 +164,11 @@ function constructYamlInteger(data) {
 }
 
 function isInteger(object) {
-  return ('[object Number]' === Object.prototype.toString.call(object)) &&
-         (0 === object % 1 && !common.isNegativeZero(object));
+  const type = Object.prototype.toString.call(object);
+  return (
+    ('[object Number]' === type && (0 === object % 1 && !common.isNegativeZero(object))) ||
+    '[object BigInt]' === type
+  );
 }
 
 export = new Type('tag:yaml.org,2002:int', {
