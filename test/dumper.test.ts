@@ -82,4 +82,10 @@ b:
       expect(safeDump({ value: 2n ** 128n - 1n })).to.equal(`value: 340282366920938463463374607431768211455\n`);
     });
   });
+
+  suite('float schema', () => {
+    test('with exponent', () => {
+      expect(safeDump({ value: '0471120e92343' })).to.equal(`value: '0471120e92343'\n`);
+    });
+  });
 });
