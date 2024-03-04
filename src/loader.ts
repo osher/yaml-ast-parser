@@ -150,6 +150,11 @@ class State{
     line:number
     lineStart:number
     lineIndent:number
+    comments?:({
+        startPosition:number
+        endPosition:number
+        value:string
+    })[];
     documents:ast.YAMLNode[];
     kind:string
     result:ast.YAMLNode
@@ -391,7 +396,7 @@ function storeMappingPair(state:State, _result:ast.YamlMap, keyTag, keyNode:ast.
         mappings: [],kind:ast.Kind.MAP};
   }
 
-  // if ('tag:yaml.org,2002:merge' === keyTag) {
+    // if ('tag:yaml.org,2002:merge' === keyTag) {
   //   if (Array.isArray(valueNode)) {
   //    for (index = 0, quantity = (<any>valueNode).length; index < quantity; index += 1) {
   //      mergeMappings(state, _result, valueNode[index]);
@@ -472,7 +477,19 @@ function positionToLine(state: State, position: number): Line {
     
     return line;
 }
+function readComment(state) {
+    var ch = 0,
+        _position = state.position;
+    do {
+        ch = state.input.charCodeAt(++state.position);
+    } while (0 !== ch && !is_EOL(ch));
 
+    state.comments.push({
+        startPosition: _position,
+        endPosition: state.position,
+        value: state.input.slice(_position + 1, state.position)
+    });
+}
 function skipSeparationSpace(state:State, allowComments, checkIndent) {
   var lineBreaks = 0,
       ch = state.input.charCodeAt(state.position);
@@ -486,9 +503,8 @@ function skipSeparationSpace(state:State, allowComments, checkIndent) {
     }
 
     if (allowComments && 0x23/* # */ === ch) {
-      do {
-        ch = state.input.charCodeAt(++state.position);
-      } while (ch !== 0x0A/* LF */ && ch !== 0x0D/* CR */ && 0 !== ch);
+      readComment(state);
+      ch = state.input.charCodeAt(state.position);
     }
 
     if (is_EOL(ch)) {
@@ -966,8 +982,8 @@ function readBlockScalar(state:State, nodeIndent) {
     while (is_WHITE_SPACE(ch));
 
     if (0x23/* # */ === ch) {
-      do { ch = state.input.charCodeAt(++state.position); }
-      while (!is_EOL(ch) && (0 !== ch));
+      readComment(state);
+      ch = state.input.charCodeAt(state.position);
     }
   }
 
@@ -1639,6 +1655,7 @@ function readDocument(state:State) {
   state.checkLineBreaks = state.legacy;
   state.tagMap = {};
   state.anchorMap = {};
+  state.comments = [];
 
   while (0 !== (ch = state.input.charCodeAt(state.position))) {
     skipSeparationSpace(state, true, -1);
@@ -1670,8 +1687,8 @@ function readDocument(state:State) {
       }
 
       if (0x23/* # */ === ch) {
-        do { ch = state.input.charCodeAt(++state.position); }
-        while (0 !== ch && !is_EOL(ch));
+        readComment(state);
+        ch = state.input.charCodeAt(state.position);
         break;
       }
 
@@ -1721,6 +1738,7 @@ function readDocument(state:State) {
     throwWarning(state, 'non-ASCII line breaks are interpreted as content');
   }
 
+  state.result.comments = state.comments;
   state.documents.push(<any>state.result);
 
   if (state.position === state.lineStart && testDocumentSeparator(state)) {

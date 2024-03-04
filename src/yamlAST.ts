@@ -16,6 +16,11 @@ export interface YAMLDocument {
     startPosition:number
     endPosition:number
     errors:YAMLException[]
+    comments?:({
+        startPosition:number
+        endPosition:number
+        value:string
+    })[];
 }
 export interface YAMLNode extends YAMLDocument{
     startPosition:number

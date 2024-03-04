@@ -34,6 +34,57 @@ inner:
         const doc1 = YAML.load(input);
         assert.deepEqual(doc1.endPosition,input.length);
     });
+
+    test('should store comments', () => {
+        const input = `---
+# first comment
+mapping: # much wow
+  key: value # so
+  seq:
+    # much discussion
+    - item # wow
+#comment
+# much comments`;
+
+        const doc = YAML.safeLoad(input);
+        assert.deepEqual(doc.comments, [
+            {
+                "startPosition": 4,
+                "endPosition": 19,
+                "value": " first comment"
+            },
+            {
+                "startPosition": 29,
+                "endPosition": 39,
+                "value": " much wow"
+            },
+            {
+                "startPosition": 53,
+                "endPosition": 57,
+                "value": " so"
+            },
+            {
+                "startPosition": 69,
+                "endPosition": 86,
+                "value": " much discussion"
+            },
+            {
+                "startPosition": 98,
+                "endPosition": 103,
+                "value": " wow"
+            },
+            {
+                "startPosition": 104,
+                "endPosition": 112,
+                "value": "comment"
+            },
+            {
+                "startPosition": 113,
+                "endPosition": 128,
+                "value": " much comments"
+            }
+        ]);
+    });
 });
 
 suite('Loading multiple documents', () => {

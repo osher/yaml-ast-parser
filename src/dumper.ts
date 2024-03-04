@@ -126,6 +126,7 @@ function State(options) {
 
   this.implicitTypes = this.schema.compiledImplicit;
   this.explicitTypes = this.schema.compiledExplicit;
+  this.comments = options['comments'] || {};
 
   this.tag = null;
   this.result = '';
@@ -348,8 +349,8 @@ function chooseScalarStyle(string, singleLineOnly, indentPerLevel, lineWidth, te
 //    • No ending newline => unaffected; already using strip "-" chomping.
 //    • Ending newline    => removed then restored.
 //  Importantly, this keeps the "+" chomp indicator from gaining an extra line.
-function writeScalar(state, string, level, iskey) {
-  state.dump = (function () {
+function writeScalar(state, string, level, iskey, pointer) {
+  var _result = (function () {
     if (string.length === 0) {
       return "''";
     }
@@ -394,6 +395,16 @@ function writeScalar(state, string, level, iskey) {
         throw new YAMLException('impossible error: invalid scalar style');
     }
   }());
+
+  if (!iskey) {
+    let comments = new Comments(state, pointer);
+    let comment = comments.write(level, 'before-eol');
+    if (comment !== '') {
+      _result += ' ' + comment;
+    }
+  }
+
+  state.dump = _result;
 }
 
 // Pre-conditions: string is valid for a block scalar, 1 <= indentPerLevel <= 9.
@@ -518,7 +529,7 @@ function escapeString(string) {
   return result;
 }
 
-function writeFlowSequence(state, level, object) {
+function writeFlowSequence(state, level, object, pointer: string) {
   var _result = '',
       _tag    = state.tag,
       index,
@@ -526,7 +537,7 @@ function writeFlowSequence(state, level, object) {
 
   for (index = 0, length = object.length; index < length; index += 1) {
     // Write only valid elements.
-    if (writeNode(state, level, object[index], false, false)) {
+    if (writeNode(state, level, object[index], false, false, false, pointer)) {
       if (index !== 0) _result += ',' + (!state.condenseFlow ? ' ' : '');
       _result += state.dump;
     }
@@ -536,15 +547,21 @@ function writeFlowSequence(state, level, object) {
   state.dump = '[' + _result + ']';
 }
 
-function writeBlockSequence(state, level, object, compact) {
+function writeBlockSequence(state, level, object, compact, pointer) {
   var _result = '',
       _tag    = state.tag,
       index,
       length;
 
+  var comments = new Comments(state, pointer);
+  _result += comments.write(level, 'before-eol');
+  _result += comments.write(level, 'leading');
+
   for (index = 0, length = object.length; index < length; index += 1) {
+    _result += comments.writeAt(String(index), level, 'before');
+
     // Write only valid elements.
-    if (writeNode(state, level + 1, object[index], true, true)) {
+    if (writeNode(state, level + 1, object[index], true, true, false, `${pointer}/${index}`)) {
       if (!compact || index !== 0) {
         _result += generateNextLine(state, level);
       }
@@ -557,13 +574,16 @@ function writeBlockSequence(state, level, object, compact) {
 
       _result += state.dump;
     }
+
+    _result += comments.writeAt(String(index), level, 'after');
   }
 
   state.tag = _tag;
   state.dump = _result || '[]'; // Empty sequence if no valid values.
+  state.dump += comments.write(level, 'trailing');
 }
 
-function writeFlowMapping(state, level, object) {
+function writeFlowMapping(state, level, object, pointer: string) {
   var _result       = '',
       _tag          = state.tag,
       objectKeyList = Object.keys(object),
@@ -583,7 +603,7 @@ function writeFlowMapping(state, level, object) {
     objectKey = objectKeyList[index];
     objectValue = object[objectKey];
 
-    if (!writeNode(state, level, objectKey, false, false)) {
+    if (!writeNode(state, level, objectKey, false, false, false, pointer)) {
       continue; // Skip this pair because of invalid key;
     }
 
@@ -591,7 +611,7 @@ function writeFlowMapping(state, level, object) {
 
     pairBuffer += state.dump + (state.condenseFlow ? '"' : '') + ':' + (state.condenseFlow ? '' : ' ');
 
-    if (!writeNode(state, level, objectValue, false, false)) {
+    if (!writeNode(state, level, objectValue, false, false, false, pointer)) {
       continue; // Skip this pair because of invalid value.
     }
 
@@ -605,7 +625,7 @@ function writeFlowMapping(state, level, object) {
   state.dump = '{' + _result + '}';
 }
 
-function writeBlockMapping(state, level, object, compact) {
+function writeBlockMapping(state, level, object, compact, pointer) {
   var _result       = '',
       _tag          = state.tag,
       objectKeyList = Object.keys(object),
@@ -628,6 +648,10 @@ function writeBlockMapping(state, level, object, compact) {
     throw new YAMLException('sortKeys must be a boolean or a function');
   }
 
+  var comments = new Comments(state, pointer);
+  _result += comments.write(level, 'before-eol');
+  _result += comments.write(level, 'leading');
+
   for (index = 0, length = objectKeyList.length; index < length; index += 1) {
     pairBuffer = '';
 
@@ -638,7 +662,9 @@ function writeBlockMapping(state, level, object, compact) {
     objectKey = objectKeyList[index];
     objectValue = object[objectKey];
 
-    if (!writeNode(state, level + 1, objectKey, true, true, true)) {
+    _result += comments.writeAt(objectKey, level, 'before');
+
+    if (!writeNode(state, level + 1, objectKey, true, true, true, pointer)) {
       continue; // Skip this pair because of invalid key.
     }
 
@@ -659,7 +685,7 @@ function writeBlockMapping(state, level, object, compact) {
       pairBuffer += generateNextLine(state, level);
     }
 
-    if (!writeNode(state, level + 1, objectValue, true, explicitPair)) {
+    if (!writeNode(state, level + 1, objectValue, true, explicitPair, false, `${pointer}/${encodeSegment(objectKey)}`)) {
       continue; // Skip this pair because of invalid value.
     }
 
@@ -673,10 +699,13 @@ function writeBlockMapping(state, level, object, compact) {
 
     // Both key and value are valid.
     _result += pairBuffer;
+
+    _result += comments.writeAt(level, objectKey, 'after');
   }
 
   state.tag = _tag;
   state.dump = _result || '{}'; // Empty mapping if no valid pairs.
+  state.dump += comments.write(level, 'trailing');
 }
 
 function detectType(state, object, explicit) {
@@ -717,7 +746,7 @@ function detectType(state, object, explicit) {
 // Serializes `object` and writes it to global `result`.
 // Returns true on success, or false on invalid object.
 //
-function writeNode(state, level, object, block, compact, iskey?: boolean) {
+function writeNode(state, level: number, object, block: boolean, compact: boolean, iskey: boolean, pointer: string) {
   state.tag = null;
   state.dump = object;
 
@@ -729,6 +758,10 @@ function writeNode(state, level, object, block, compact, iskey?: boolean) {
 
   if (block) {
     block = (state.flowLevel < 0 || state.flowLevel > level);
+  }
+
+  if ((state.tag !== null && state.tag !== '?') || (state.indent !== 2 && level > 0)) {
+    compact = false;
   }
 
   var objectOrArray = type === '[object Object]' || type === '[object Array]',
@@ -752,12 +785,12 @@ function writeNode(state, level, object, block, compact, iskey?: boolean) {
     }
     if (type === '[object Object]') {
       if (block && (Object.keys(state.dump).length !== 0)) {
-        writeBlockMapping(state, level, state.dump, compact);
+        writeBlockMapping(state, level, state.dump, compact, pointer);
         if (duplicate) {
           state.dump = '&ref_' + duplicateIndex + state.dump;
         }
       } else {
-        writeFlowMapping(state, level, state.dump);
+        writeFlowMapping(state, level, state.dump, pointer);
         if (duplicate) {
           state.dump = '&ref_' + duplicateIndex + ' ' + state.dump;
         }
@@ -765,19 +798,19 @@ function writeNode(state, level, object, block, compact, iskey?: boolean) {
     } else if (type === '[object Array]') {
       var arrayLevel = (state.noArrayIndent && (level > 0)) ? level - 1 : level;
       if (block && (state.dump.length !== 0)) {
-        writeBlockSequence(state, arrayLevel, state.dump, compact);
+        writeBlockSequence(state, arrayLevel, state.dump, compact, pointer);
         if (duplicate) {
           state.dump = '&ref_' + duplicateIndex + state.dump;
         }
       } else {
-        writeFlowSequence(state, arrayLevel, state.dump);
+        writeFlowSequence(state, arrayLevel, state.dump, pointer);
         if (duplicate) {
           state.dump = '&ref_' + duplicateIndex + ' ' + state.dump;
         }
       }
     } else if (type === '[object String]') {
       if (state.tag !== '?') {
-        writeScalar(state, state.dump, level, iskey);
+        writeScalar(state, state.dump, level, iskey, pointer);
       }
     } else {
       if (state.skipInvalid) return false;
@@ -852,7 +885,19 @@ export interface DumpOptions {
   lineWidth?: number;
   /** if `true`, don't convert duplicate objects into references (default: false) */
   noRefs?: boolean;
+  /** list of comments to add */
+  comments?: {
+    [x: string]: Comment[];
+  };
 }
+
+export type Comment = Readonly<{
+  value: string;
+  placement: 'before-eol' | 'leading' | 'trailing' | 'between';
+} & ({} | {
+  placement: 'between';
+  between: [string, string];
+})>;
 
 export function dump(input, options?: DumpOptions) {
   options = options || {};
@@ -861,7 +906,7 @@ export function dump(input, options?: DumpOptions) {
 
   if (!options.noRefs) getDuplicateReferences(input, state);
 
-  if (writeNode(state, 0, input, true, true)) {
+  if (writeNode(state, 0, input, true, true, false, '#')) {
     return state.dump + '\n';
   }
   return '';
@@ -870,3 +915,85 @@ export function dump(input, options?: DumpOptions) {
 export function safeDump(input, options?: DumpOptions) {
   return dump(input, common.extend({ schema: DEFAULT_SAFE_SCHEMA }, options));
 }
+
+const TILDE_REGEXP = /~/g;
+const SLASH_REGEXP = /\//g;
+
+function encodeSegment(input: string) {
+  return input.replace(TILDE_REGEXP, '~0').replace(SLASH_REGEXP, '~1');
+}
+
+function Comments(state, pointer) {
+  this.state = state;
+  this.comments = {
+    'before-eol': new Set<Comment>(),
+    leading: new Set<Comment>(),
+    trailing: new Set<Comment>(),
+    before: new Map<string, Set<Comment>>(),
+    after: new Map<string, Set<Comment>>(),
+  };
+  this.written = new WeakSet<Comment>();
+
+  if (state.comments !== null && pointer in state.comments) {
+    for (let comment of state.comments[pointer]) {
+      switch (comment.placement) {
+        case 'before-eol':
+        case 'leading':
+        case 'trailing':
+          this.comments[comment.placement].add(comment);
+          break;
+        case 'between':
+          let before = this.comments.before.get(comment.between[1]);
+          if (!before) {
+            this.comments.before.set(comment.between[1], new Set([comment]));
+          } else {
+            before.add(comment);
+          }
+
+          let after = this.comments.after.get(comment.between[0]);
+          if (!after) {
+            this.comments.after.set(comment.between[0], new Set([comment]));
+          } else {
+            after.add(comment);
+          }
+
+          break;
+      }
+    }
+  }
+
+}
+
+Comments.prototype.write = function (level: number, placement: Comment['placement']): string {
+  let result = ''
+  for (let comment of this.comments[placement]) {
+    result += this._write(comment, level);
+  }
+
+  return result;
+}
+
+Comments.prototype.writeAt = function (key: string, level: number, placement: 'before' | 'after'): string {
+  let result = '';
+  let comments = this.comments[placement].get(key);
+  if (comments) {
+    for (let comment of comments) {
+      result += this._write(comment, level);
+    }
+  }
+
+  return result;
+}
+
+Comments.prototype._write = function (comment: Comment, level: number): string {
+  if (this.written.has(comment)) return '';
+  this.written.add(comment);
+  let result = '#' + comment.value;
+  if (comment.placement === 'before-eol') {
+    return result;
+  } else if (level === 0 && comment.placement === 'leading') {
+    return result + '\n'
+  } else {
+    return generateNextLine(this.state, level) + result;
+  }
+};
