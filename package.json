@@ -2,6 +2,12 @@
   "name": "yaml-ast-parser",
   "version": "0.0.43",
   "main": "dist/src/index.js",
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.js.map",
+    "dist/**/*.d.ts",
+    "!dist/test"
+  ],
   "scripts": {
     "build": "rimraf dist && tsc",
     "pullall": "dev-env-installer pullall",
